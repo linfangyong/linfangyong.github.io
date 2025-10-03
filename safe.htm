@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>请先完成安全验证</title>
+  <style>
+    .captcha-box {
+      width: 320px;
+      margin: 50px auto;
+      padding: 15px;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+    }
+    .captcha-title {
+      font-size: 14px;
+      color: #333;
+      margin-bottom: 10px;
+    }
+    .puzzle-container {
+      position: relative;
+      width: 320px;
+      height: 160px;
+      border-radius: 4px;
+      overflow: hidden;
+      background-color: #f9fafb;
+    }
+    /* 背景图 */
+    .puzzle-bg {
+      width: 100%;
+      height: 100%;
+      background-size: cover;
+      background-position: center;
+    }
+    /* 缺失区域（阴影效果） */
+    .puzzle-missing {
+      position: absolute;
+      width: 50px;
+      height: 50px;
+      background-color: rgba(0, 0, 0, 0.2);
+      border: 1px dashed #fff;
+    }
+    /* 拼图块（可拖动） */
+    .puzzle-piece {
+      position: absolute;
+      width: 50px;
+      height: 50px;
+      background-size: 320px 160px; /* 与背景图尺寸一致 */
+      background-position: 0 0;
+      border: 1px solid #fff;
+      box-shadow: 0 0 8px rgba(0, 0, 0, 0.3);
+      cursor: grab;
+      z-index: 2;
+    }
+    .puzzle-piece:active {
+      cursor: grabbing;
+    }
+    /* 滑块轨道 */
+    .slider-container {
+      margin-top: 15px;
+    }
+    .slider-track {
+      width: 100%;
+      height: 40px;
+      background-color: #f0f2f5;
+      border-radius: 20px;
+      position: relative;
+      overflow: hidden;
+    }
+    .slider-btn {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 40px;
+      height: 40px;
+      background-color: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 50%;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background-color 0.2s;
+      z-index: 2;
+    }
+    .slider-btn:hover {
+      background-color: #f5f5f5;
+    }
+    .slider-btn.success {
+      background-color: #52c41a;
+      color: white;
+    }
+    .slider-progress {
+      position: absolute;
+      top: 0;
+      left: 0;
+      height: 100%;
+      width: 0;
+      background-color: #e6f7ed;
+      z-index: 1;
+    }
+    .slider-text {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      line-height: 40px;
+      text-align: center;
+      font-size: 12px;
+      color: #666;
+      z-index: 0;
+    }
+    /* 提示信息 */
+    .captcha-hint {
+      margin-top: 10px;
+      font-size: 12px;
+      height: 16px;
+      color: #f5222d;
+    }
+  </style>
+</head>
+<body>
+  <div class="captcha-box">
+    <div class="captcha-title">安全验证</div>
+    <div class="puzzle-container">
+      <div class="puzzle-bg" id="puzzleBg"></div>
+      <div class="puzzle-missing" id="puzzleMissing"></div>
+      <div class="puzzle-piece" id="puzzlePiece"></div>
+    </div>
+    <div class="slider-container">
+      <div class="slider-track">
+        <div class="slider-btn" id="sliderBtn" style="user-select:none;">→</div>
+        <div class="slider-progress" id="sliderProgress"></div>
+        <div class="slider-text" id="sliderText">拖动滑块完成拼图</div>
+      </div>
+    </div>
+    <div class="captcha-hint" id="captchaHint"></div>
+  </div>
+
+  <script>
+    // 配置参数
+    const config = {
+      bgWidth: 320,       // 背景图宽度
+      bgHeight: 160,      // 背景图高度
+      pieceSize: 50,      // 拼图块尺寸
+      tolerance: 5,       // 验证误差范围（像素）
+      bgImage: "https://picsum.photos/400/300" // 背景图地址（使用用户提供的图片）
+    };
+
+    // DOM 元素
+    const puzzleBg = document.getElementById("puzzleBg");
+    const puzzleMissing = document.getElementById("puzzleMissing");
+    const puzzlePiece = document.getElementById("puzzlePiece");
+    const sliderBtn = document.getElementById("sliderBtn");
+    const sliderProgress = document.getElementById("sliderProgress");
+    const sliderText = document.getElementById("sliderText");
+    const captchaHint = document.getElementById("captchaHint");
+
+    // 随机生成目标位置（拼图块需要移动到的位置）
+    let targetPos = {
+      x: Math.floor(Math.random() * (config.bgWidth - config.pieceSize)),
+      y: Math.floor(Math.random() * (config.bgHeight - config.pieceSize))
+    };
+
+    // 初始化拼图
+    function initPuzzle() {
+      // 设置背景图
+      puzzleBg.style.backgroundImage = `url(${config.bgImage})`;
+      
+      // 设置缺失区域位置
+      puzzleMissing.style.left = `${targetPos.x}px`;
+      puzzleMissing.style.top = `${targetPos.y}px`;
+      
+      // 设置拼图块初始位置（左侧外部）和背景偏移
+      puzzlePiece.style.left = `-${config.pieceSize}px`;
+      puzzlePiece.style.top = `${targetPos.y}px`;
+      puzzlePiece.style.backgroundImage = `url(${config.bgImage})`;
+      puzzlePiece.style.backgroundPosition = `-${targetPos.x}px -${targetPos.y}px`;
+    }
+
+    // 拖动逻辑
+    let isDragging = false;
+    let startX = 0;
+    let currentX = 0;
+
+    // 鼠标/触摸事件处理
+    function handleStart(e) {
+      if (isVerified) return; // 已验证通过则禁止再次拖动
+      isDragging = true;
+      startX = e.type.includes('mouse') ? e.clientX : e.touches[0].clientX;
+      sliderBtn.style.transition = "none";
+      puzzlePiece.style.transition = "none";
+    }
+
+    function handleMove(e) {
+      if (!isDragging) return;
+      const clientX = e.type.includes('mouse') ? e.clientX : e.touches[0].clientX;
+      currentX = clientX - startX;
+      
+      // 限制滑块在轨道内
+      const maxX = config.bgWidth - config.pieceSize;
+      currentX = Math.max(0, Math.min(currentX, maxX));
+      
+      // 更新滑块和拼图块位置
+      sliderBtn.style.left = `${currentX}px`;
+      sliderProgress.style.width = `${currentX + config.pieceSize/2}px`;
+      puzzlePiece.style.left = `${currentX}px`;
+    }
+
+    function handleEnd() {
+      if (!isDragging) return;
+      isDragging = false;
+      sliderBtn.style.transition = "left 0.2s";
+      puzzlePiece.style.transition = "left 0.2s";
+
+      // 验证是否成功
+      const isMatch = Math.abs(currentX - targetPos.x) <= config.tolerance;
+      if (isMatch) {
+        verifySuccess();
+      } else {
+        verifyFail();
+      }
+    }
+
+    // 验证成功
+    let isVerified = false;
+    function verifySuccess() {
+      isVerified = true;
+      sliderBtn.classList.add("success");
+      sliderBtn.innerHTML = "✓";
+      sliderText.textContent = "验证通过";
+      sliderText.style.color = "#52c41a";
+      captchaHint.textContent = "";
+
+// 获取单个参数值
+function getUrlParam(url, paramName) {
+    const urlObj = new URL(url);
+    return urlObj.searchParams.get(paramName);
+}
+      setTimeout(function() {
+	const params = getUrlParam(window.location.href, 'url');
+    	window.location.href = params+'?token=';
+	}, 3000);
+    }
+
+    // 验证失败（重置位置）
+    function verifyFail() {
+      currentX = 0;
+      sliderBtn.style.left = "0";
+      sliderProgress.style.width = "0";
+      puzzlePiece.style.left = `-${config.pieceSize}px`;
+      captchaHint.textContent = "验证失败，请重试";
+      
+      // 300ms后清空提示（优化体验）
+      setTimeout(() => {
+        captchaHint.textContent = "";
+      }, 2000);
+    }
+
+    // 绑定事件（同时支持鼠标和触摸事件，适配移动端）
+    sliderBtn.addEventListener("mousedown", handleStart);
+    document.addEventListener("mousemove", handleMove);
+    document.addEventListener("mouseup", handleEnd);
+    document.addEventListener("mouseleave", handleEnd);
+
+    sliderBtn.addEventListener("touchstart", handleStart);
+    document.addEventListener("touchmove", handleMove, { passive: false }); // 禁止页面滚动
+    document.addEventListener("touchend", handleEnd);
+
+    // 初始化
+    initPuzzle();
+  </script>
+</body>
+</html>
