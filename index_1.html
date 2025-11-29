@@ -4,6 +4,21 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>多功能速写板</title>
+    <style>
+        /* 新增样式：优化按钮布局和文字样式选择器 */
+        .text-style-btn {
+            margin: 0 5px;
+            padding: 2px 8px;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+            background: #f5f5f5;
+            cursor: pointer;
+        }
+        .text-style-btn.active {
+            background: #e0e0e0;
+            border-color: #999;
+        }
+    </style>
 </head>
 <body>
     <h1>多功能速写板</h1>
@@ -11,11 +26,11 @@
     <!-- 画布 -->
     <canvas id="sketchCanvas" width="800" height="600" style="border:1px solid #000; background:#fff;"></canvas>
     
-    <!-- 控制区域（新增橡皮工具和橡皮大小调整） -->
+    <!-- 控制区域（新增文字样式按钮和Alt+T提示） -->
     <div>
-        <!-- 工具选择（新增橡皮工具） -->
+        <!-- 工具选择 -->
         <button onclick="setTool('pen')" class="tool-btn" style="background:#e0e0e0;">画笔</button>
-        <button onclick="setTool('eraser')" class="tool-btn">橡皮</button> <!-- 新增橡皮工具 -->
+        <button onclick="setTool('eraser')" class="tool-btn">橡皮</button>
         <button onclick="setTool('line')" class="tool-btn">直线</button>
         <button onclick="setTool('arrow')" class="tool-btn">箭头</button>
         <button onclick="setTool('rect')" class="tool-btn">矩形</button>
@@ -28,19 +43,25 @@
         <button onclick="setTool('hexagon')" class="tool-btn">不规则六边形</button>
         <button onclick="setTool('text')" class="tool-btn">文字</button>
         
-        <!-- 参数控制（新增橡皮大小调整） -->
+        <!-- 参数控制（新增文字样式选择器） -->
         <label for="lineWidth">粗细/橡皮大小：</label>
-        <input type="number" id="lineWidth" value="2" min="1" max="50">px <!-- 最大调整到50px，适合擦除 -->
+        <input type="number" id="lineWidth" value="2" min="1" max="50">px
         
         <label for="colorPicker" style="margin-left:10px;">颜色：</label>
         <input type="color" id="colorPicker" value="#000000">
+        
+        <!-- 新增文字样式控制 -->
+        <span style="margin-left:10px;">文字样式：</span>
+        <button class="text-style-btn" onclick="toggleTextStyle('bold')" title="粗体">B</button>
+        <button class="text-style-btn" onclick="toggleTextStyle('italic')" title="斜体"><i>I</i></button>
+        <button class="text-style-btn" onclick="toggleTextStyle('underline')" title="下划线"><u>U</u></button>
         
         <label for="fontSize" style="margin-left:10px;">文字大小：</label>
         <input type="number" id="fontSize" value="16" min="8" max="48">px
         
         <button onclick="clearCanvas()">清除画布</button>
         <button onclick="downloadCanvasAsPNG()">下载PNG</button>
-        <span style="margin-left:10px; font-size:14px;">文字输入：Alt+U 确认 | 多边形：点击设顶点，右键/双击结束</span>
+        <span style="margin-left:10px; font-size:14px;">文字输入：Alt+T聚焦 | Alt+U确认 | 多边形：点击设顶点，右键/双击结束</span>
     </div>
 
     <!-- 多行文本输入域 -->
@@ -70,9 +91,18 @@
             hexagon: 6
         };
 
+        // 文字样式配置（新增）
+        let textStyles = {
+            bold: false,
+            italic: false,
+            underline: false
+        };
+
         // 获取DOM元素
         const colorPicker = document.getElementById('colorPicker');
         const lineWidthInput = document.getElementById('lineWidth');
+        const fontSizeInput = document.getElementById('fontSize');
+        const textStyleBtns = document.querySelectorAll('.text-style-btn');
 
         // 设置当前工具
         function setTool(tool) {
@@ -88,6 +118,19 @@
             // 调整输入框提示文字（区分画笔/橡皮）
             document.querySelector('label[for="lineWidth"]').textContent = 
                 currentTool === 'eraser' ? '橡皮大小：' : '粗细/橡皮大小：';
+        }
+
+        // 切换文字样式（粗体/斜体/下划线）- 新增
+        function toggleTextStyle(styleType) {
+            textStyles[styleType] = !textStyles[styleType];
+            // 更新按钮激活状态
+            textStyleBtns.forEach(btn => {
+                if ((styleType === 'bold' && btn.textContent === 'B') ||
+                    (styleType === 'italic' && btn.innerHTML === '<i>I</i>') ||
+                    (styleType === 'underline' && btn.innerHTML === '<u>U</u>')) {
+                    btn.classList.toggle('active', textStyles[styleType]);
+                }
+            });
         }
 
         // 重置多边形状态
@@ -184,6 +227,23 @@
             }
         });
 
+        // 全局快捷键：Alt+T 聚焦文本框（新增）
+        document.addEventListener('keydown', (e) => {
+            if (e.altKey && e.key === 't' && currentTool === 'text') {
+                e.preventDefault();
+                // 如果文本框已显示，直接聚焦；否则在画布中心显示
+                if (textInput.style.display === 'block') {
+                    textInput.focus();
+                } else {
+                    const centerX = canvas.width / 2;
+                    const centerY = canvas.height / 2;
+                    textStartX = centerX;
+                    textStartY = centerY;
+                    showTextInput(centerX, centerY);
+                }
+            }
+        });
+
         // 处理多边形鼠标按下
         function handlePolygonMouseDown(x, y) {
             const requiredVertices = polygonConfig[currentTool];
@@ -222,7 +282,7 @@
             resetPolygonState();
         }
 
-        // 核心绘制函数（新增橡皮绘制逻辑）
+        // 核心绘制函数
         function draw(e) {
             if (!isDrawing && !isPolygonDrawing) return;
             
@@ -362,7 +422,7 @@
             textInput.style.width = '200px';
             textInput.style.height = '100px';
             textInput.value = '';
-            textInput.focus();
+            textInput.focus(); // 自动聚焦
         }
 
         // 文本输入确认
@@ -377,13 +437,19 @@
             }
         });
 
-        // 绘制多行文字
+        // 绘制多行文字（支持文字样式）- 优化
         function drawMultiLineText(x, y, text, color) {
-            const fontSize = parseInt(document.getElementById('fontSize').value);
+            const fontSize = parseInt(fontSizeInput.value);
             const lineHeight = fontSize * 1.4;
             const lines = text.split('\n');
 
-            ctx.font = `${fontSize}px Arial`;
+            // 构建文字样式字符串（粗体/斜体/正常）
+            let fontStyle = '';
+            if (textStyles.bold) fontStyle += 'bold ';
+            if (textStyles.italic) fontStyle += 'italic ';
+            fontStyle += `${fontSize}px Arial`;
+
+            ctx.font = fontStyle;
             ctx.fillStyle = color;
             ctx.textAlign = 'left';
             ctx.textBaseline = 'top';
@@ -391,7 +457,18 @@
 
             lines.forEach((line, index) => {
                 const lineY = y + (index * lineHeight);
+                // 绘制文字主体
                 ctx.fillText(line, x, lineY);
+                // 绘制下划线（如果启用）
+                if (textStyles.underline) {
+                    const textWidth = ctx.measureText(line).width;
+                    ctx.beginPath();
+                    ctx.moveTo(x, lineY + fontSize + 2); // 下划线位置在文字底部下方2px
+                    ctx.lineTo(x + textWidth, lineY + fontSize + 2);
+                    ctx.lineWidth = 1; // 下划线粗细
+                    ctx.strokeStyle = color;
+                    ctx.stroke();
+                }
             });
         }
 
@@ -435,6 +512,9 @@
             textInput.style.display = 'none';
             resetPolygonState();
             ctx.globalCompositeOperation = 'source-over'; // 恢复正常模式
+            // 重置文字样式选择（可选：清除画布时重置文字样式）
+            textStyles = { bold: false, italic: false, underline: false };
+            textStyleBtns.forEach(btn => btn.classList.remove('active'));
         }
 
         // 下载画布为PNG
